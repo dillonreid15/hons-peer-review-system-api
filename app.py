@@ -1,5 +1,6 @@
 from crypt import methods
 from email.message import EmailMessage
+from os import EX_CANTCREAT
 from flask import Flask, send_from_directory, jsonify, request
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
@@ -15,6 +16,7 @@ import sys
 app = Flask(__name__)
 CORS(app)
 api = Api(app)
+req_data = ast.literal_eval(request.data.decode('utf-8'))
 
 
 username = 'dillonreid15'
@@ -46,7 +48,7 @@ class Class(db.Model):
     __tablename__ = 'Class'
     ClassID = db.Column(db.Integer, primary_key=True)
     ClassName = db.Column(db.Text)
-    ModuleID = db.Column(db.Integer)
+    ModuleID = db.Column(db.Text)
 
 class ClassAssignedUsers(db.Model):
     __tablename__ = 'ClassAssignedUsers'
@@ -213,13 +215,12 @@ def user_serializer(user):
         'FullName' : user.FullName,
 
     }         
-
+# ---------- COMPLETED / ADD SECURITY ---------- 
 @app.route('/usercheck', methods=['GET', 'POST'])
 def checkUserAccount():
     if request.method == 'POST':
         try:
             #change request byte object into a dict
-            req_data = ast.literal_eval(request.data.decode('utf-8'))
             #get the user with matching email in DB
             user_to_validate = User.query.filter(User.Email==req_data['Email']).first()
             if not user_to_validate:
@@ -240,11 +241,11 @@ def checkUserAccount():
 
 #This is used to assign students teams, classes, and modules if none exists
 #For testing purposes, can be deleted before use in a production environment
+# ---------- STILL TO BE COMPLETED ---------- 
 @app.route('/checkforstudentdata', methods=['GET', 'POST'])
 def checkStudentData():
     if request.method == 'POST':
         try:
-            req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data["Email"]
             classes = ClassAssignedUsers.query.filter_by(Email=email).first()
             modules = ModuleAssignedUsers.query.filter_by(Email=email).first()
@@ -252,8 +253,6 @@ def checkStudentData():
             courseAssignedStudents = StudentAssignedTeams.query.filter.by("Email=email").first()
             if modules or classes or teams == None:
                 #generate test data
-                UsersForClassApplied = CourseAssignedStudents.query.filter_by(UCASID='I100').order_by(func.random()).limit(29)
-                UsersForClassCS = CourseAssignedStudents.query.filter_by(UCASID='G400').order_by(func.random()).limit(10)
                 listOfModuleIDs = Modules.query.with_entities(Modules.ModuleID)
 
                 for x in listOfModuleIDs:
@@ -263,24 +262,46 @@ def checkStudentData():
 
                 courseUser = CourseAssignedStudents(UCASID='G400', Email=email)
                 db.session.add(courseUser)
-                db.session.commit()
+                db.session.commit()            
             
-            
-
             else:  
                 return {'Message' : 'User has valid data'}
             #return jsonify([*])
         except:
             raise Exception("Failed to retrieve user")
 
+@app.route('/createreviewform', methods=['GET', 'POST'])
+def createReviewForm():
+    if request.method == 'POST':
+        try: 
+            email = req_data["Email"]
+        except:
+            raise Exception("Failed to Retrieve user")
 
+@app.route('/checkforlecturerdata', methods=['GET', 'POST'])
+
+@app.route('/getmymodules', method=['GET', 'POST'])
+def getMyModules():
+    if request.method == 'POST':
+        try: 
+            email = req_data['Email']
+            return jsonify([*map(moduleAssignedUser_serializer, Modules.query.filter(ModuleAssignedUsers.Email == email))])
+        except: 
+            raise Exception("Failed to retrieve Modules")
+
+@app.route('/getclassesformodule', method=['GET', 'POST'])
+def getMyModules():
+    if request.method == 'POST':
+        try: 
+            moduleid = req_data['ModuleID']
+            return jsonify([*map(class_serializer, Class.query.filter(Class.ModuleID == moduleid))])
+        except: 
+            raise Exception("Failed to retrieve Modules")
 #getMyReviewFormListStudents
 
 #loadReviewFormStudent
 
 #getMyTeamStudent
-
-#getMyModulesLecturer
 
 #getMyClassesLecturer
 
