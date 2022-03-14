@@ -16,8 +16,6 @@ import sys
 app = Flask(__name__)
 CORS(app)
 api = Api(app)
-req_data = ast.literal_eval(request.data.decode('utf-8'))
-
 
 username = 'dillonreid15'
 password = 'peerreview!'
@@ -113,15 +111,7 @@ class Teams(db.Model):
     TeamName = db.Column(db.Text)
     ClassID = db.Column(db.Integer)
     GroupMark = db.Column(db.Integer)
-    GroupGrade = db.Column(db.Text)
-
-class StudentAssignedTeams(db.Model):
-    __tablename__ = 'StudentAssignedTeams' 
-    AssignmentID = db.Column(db.Integer, primary_key=True)
-    TeamsID = db.Column(db.Integer)
-    Email = db.Column(db.Text)
-    ModulatedMark = db.Column(db.Integer)
-    ModulatedGrade = db.Column(db.Text)    
+    GroupGrade = db.Column(db.Text)   
 
 class User(db.Model): 
     __tablename__ = 'User' 
@@ -222,6 +212,7 @@ def checkUserAccount():
         try:
             #change request byte object into a dict
             #get the user with matching email in DB
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
             user_to_validate = User.query.filter(User.Email==req_data['Email']).first()
             if not user_to_validate:
                 email = req_data['Email']
@@ -238,6 +229,8 @@ def checkUserAccount():
                 return { 'Message' : 'User already registered'}
         except:
             raise Exception("Cannot retrieve user")
+    else:
+        return {'Message':'Expected post'}            
 
 #This is used to assign students teams, classes, and modules if none exists
 #For testing purposes, can be deleted before use in a production environment
@@ -246,6 +239,7 @@ def checkUserAccount():
 def checkStudentData():
     if request.method == 'POST':
         try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data["Email"]
             classes = ClassAssignedUsers.query.filter_by(Email=email).first()
             modules = ModuleAssignedUsers.query.filter_by(Email=email).first()
@@ -269,34 +263,43 @@ def checkStudentData():
             #return jsonify([*])
         except:
             raise Exception("Failed to retrieve user")
+    else:
+        return {'Message':'Expected post'}            
 
 @app.route('/createreviewform', methods=['GET', 'POST'])
 def createReviewForm():
     if request.method == 'POST':
         try: 
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data["Email"]
         except:
             raise Exception("Failed to Retrieve user")
+    else:
+        return {'Message':'Expected post'}            
 
-@app.route('/checkforlecturerdata', methods=['GET', 'POST'])
-
-@app.route('/getmymodules', method=['GET', 'POST'])
+@app.route('/getmymodules', methods=['GET', 'POST'])
 def getMyModules():
     if request.method == 'POST':
         try: 
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data['Email']
-            return jsonify([*map(moduleAssignedUser_serializer, Modules.query.filter(ModuleAssignedUsers.Email == email))])
+            return jsonify([*map(moduleAssignedUser_serializer, ModuleAssignedUsers.query.filter(ModuleAssignedUsers.Email == email))])
         except: 
             raise Exception("Failed to retrieve Modules")
+    else:
+        return {'Message':'Expected post'}            
 
-@app.route('/getclassesformodule', method=['GET', 'POST'])
-def getMyModules():
+@app.route('/getclassesformodule', methods=['GET', 'POST'])
+def getMyClasses():
     if request.method == 'POST':
         try: 
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
             moduleid = req_data['ModuleID']
             return jsonify([*map(class_serializer, Class.query.filter(Class.ModuleID == moduleid))])
         except: 
             raise Exception("Failed to retrieve Modules")
+    else:
+        return {'Message':'Expected post'}            
 #getMyReviewFormListStudents
 
 #loadReviewFormStudent
