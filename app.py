@@ -1,5 +1,6 @@
 from crypt import methods
 from email.message import EmailMessage
+from modulefinder import Module
 from os import EX_CANTCREAT
 from flask import Flask, send_from_directory, jsonify, request
 from flask_restful import Api, Resource, reqparse
@@ -119,6 +120,20 @@ class User(db.Model):
     IsStudent = db.Column(db.Integer)
     FullName = db.Column(db.Text)
 
+class LecturerAssignedForm(db.Model):
+    __tablename__ = 'LecturerAssignedForms'
+    AssignedID = db.Column(db.Integer, primary_key=True)
+    CreatedFormJSON = db.Column(db.JSON)
+    Email = db.Column(db.Text)
+    CreatedFormName = db.Column(db.Text)
+    ReviewID = db.Column(db.Integer)
+
+class ClassAssessment(db.Model):
+    __tablename__ = 'ClassAssessment'
+    AssessmentID = db.Column(db.Integer, primary_key=True)
+    ClassID = db.Column(db.Integer)
+    AssessmentName = db.Column(db.Text)
+
 
 @app.route('/')
 def testpage():
@@ -203,9 +218,29 @@ def user_serializer(user):
         'Email' : user.Email,
         'IsStudent' : user.IsStudent,
         'FullName' : user.FullName,
+    }     
 
-    }         
+def lecturerassignedforms_serializer(lecturerassignedforms):
+    return {
+        'AssignedID' : lecturerassignedforms.AssignedID,
+        'CreatedFormJSON' : lecturerassignedforms.CreatedFormJSON,
+        'Email' : lecturerassignedforms.Email,
+        'CreatedFormName' : lecturerassignedforms.CreatedFormName,
+        'ReviewID' : lecturerassignedforms.ReviewID
+    }    
+
+def classassessment_serializer(classassement):
+    return {
+        'AssessmentID' : classassement.AssessmentID,
+        'ClassID' : classassement.ClassID,
+        'AssessmentName' : classassement.AssessmentName,
+    }    
+
+
 # ---------- COMPLETED / ADD SECURITY ---------- 
+#Adds user to dataabase, only includes data available through 
+#Microsoft authentication, Email, and name, from which I can also 
+#get whether they're staff or a student
 @app.route('/usercheck', methods=['GET', 'POST'])
 def checkUserAccount():
     if request.method == 'POST':
@@ -218,8 +253,8 @@ def checkUserAccount():
                 email = req_data['Email']
                 isStudent = req_data['IsStudent']
                 fullname = req_data['FullName']
-                print(email, file=sys.stderr)
-                print(isStudent, file=sys.stderr)
+                # print(email, file=sys.stderr)
+                # print(isStudent, file=sys.stderr)
                 userToAdd = User(Email=email, IsStudent=isStudent, FullName=fullname)
 
                 db.session.add(userToAdd)
@@ -256,7 +291,8 @@ def checkStudentData():
 
                 courseUser = CourseAssignedStudents(UCASID='G400', Email=email)
                 db.session.add(courseUser)
-                db.session.commit()            
+                db.session.commit()  
+                return { 'Message' : 'Sample data successfully added' }          
             
             else:  
                 return {'Message' : 'User has valid data'}
@@ -265,30 +301,31 @@ def checkStudentData():
             raise Exception("Failed to retrieve user")
     else:
         return {'Message':'Expected post'}            
-
-@app.route('/createreviewform', methods=['GET', 'POST'])
-def createReviewForm():
-    if request.method == 'POST':
-        try: 
-            req_data = ast.literal_eval(request.data.decode('utf-8'))
-            email = req_data["Email"]
-        except:
-            raise Exception("Failed to Retrieve user")
-    else:
-        return {'Message':'Expected post'}            
-
+       
+#Get list of modules for signed in user,
+#works for both students and staff as Emails are assigned to ModuleId's
+#Regardless of whether or not they're a student or staff
 @app.route('/getmymodules', methods=['GET', 'POST'])
 def getMyModules():
     if request.method == 'POST':
         try: 
             req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data['Email']
-            return jsonify([*map(moduleAssignedUser_serializer, ModuleAssignedUsers.query.filter(ModuleAssignedUsers.Email == email))])
+            listofTest =[]
+            for row in ModuleAssignedUsers.query.with_entities(ModuleAssignedUsers.ModuleID).filter(ModuleAssignedUsers.Email == email).all():
+                listofTest.append(row)
+
+            listToPass = [i[0] for i in listofTest]
+
+            listOfModules = Modules.query.filter(Modules.ModuleID.in_(listToPass)).all()
+
+            return jsonify([*map(modules_serializer, listOfModules)])
         except: 
             raise Exception("Failed to retrieve Modules")
     else:
         return {'Message':'Expected post'}            
 
+#Return list of classes for given ModuleID
 @app.route('/getclassesformodule', methods=['GET', 'POST'])
 def getMyClasses():
     if request.method == 'POST':
@@ -299,28 +336,98 @@ def getMyClasses():
         except: 
             raise Exception("Failed to retrieve Modules")
     else:
-        return {'Message':'Expected post'}            
+        return {'Message':'Expected post'}        
+
+#Return list of assessments for given Class
+@app.route('/getassessmentsformodule', methods=['GET', 'POST'])
+def getMyAssessments():
+    if request.method == 'POST':
+        try: 
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            moduleid = req_data['ModuleID']
+            listofAssessments =[]
+            for row in ModuleAssignedUsers.query.with_entities(ModuleAssignedUsers.ModuleID).filter(ModuleAssignedUsers.Email == email).all():
+                listofAssessments.append(row)
+
+            listToPass = [i[0] for i in listofAssessments]
+
+
+            return jsonify([*map(classassessment_serializer, ClassAssessment.query.filter(ClassAssessment.ClassID == classid))])
+        except: 
+            raise Exception("Failed to retrieve Modules")
+    else:
+        return {'Message':'Expected post'}        
+
+
+#Upload JSON of form created by lecturer
+@app.route('/uploadform', methods=['GET', 'POST'])
+def uploadForm():
+    if request.method == 'POST':
+        try:
+            req_data=ast.literal_eval(request.data.decode('utf-8'))
+            content = req_data['Form']
+            y = json.loads(content)
+            email = y['email']
+            createdformname = y['name']
+            # print(email, file=sys.stderr)
+            # print(createdformname, file=sys.stderr)
+            toupload = LecturerAssignedForm(CreatedFormJSON = content, Email = email, CreatedFormName = createdformname)
+            db.session.add(toupload)
+            db.session.flush()
+            id = toupload.AssignedID
+            db.session.commit()
+            # print(str(toupload.AssignedID))
+            return (str(toupload.AssignedID))
+        except:
+            raise Exception("Failed to upload")
+    else:
+        return {'Message':'Expected post'} 
+
+@app.route('/getlecturersformodule', methods=['GET', 'POST'])
+def getLecturersForModule():
+    if request.method == 'POST':
+        try:
+            req_data=ast.literal_eval(request.data.decode('utf-8'))
+            moduleID = req_data['ModuleID']
+            email = req_data['Email']
+            listOfEmail = []
+            for row in ModuleAssignedUsers.query.with_entities(ModuleAssignedUsers.Email).filter(ModuleAssignedUsers.ModuleID == moduleID).all():
+                listOfEmail.append(row)
+
+            listOfEmail = [i[0] for i in listOfEmail]
+            ListOfUsersFromEmail = User.query.filter(User.Email.in_(listOfEmail), User.IsStudent == 0, User.Email != email).all()
+
+            # print(email, file=sys.stderr)
+            print(ListOfUsersFromEmail, file=sys.stderr)
+            return jsonify([*map(user_serializer, ListOfUsersFromEmail)])
+        except:
+            raise Exception("Failed to recieve lecturers")
+    else:
+        return {'Message':'Expected post'} 
+
+# @app.route('/createteam', methods=['GET', 'POST'])
+# def createTeam():
+#     if request.method == 'POST':
+#         try:
+            
+#         except: 
+#             raise Exception("Failed to create teams")
+#     else:
+#         return {'Message':'Expected post'}
+
 #getMyReviewFormListStudents
 
 #loadReviewFormStudent
 
 #getMyTeamStudent
 
-#getMyClassesLecturer
-
-#getMyTeamsLecturer
-
 #createReviewFormLecturer
 
 #createTeamsLecturer
 
-#getMyClassesTeamsLecturer
-
 #submitTeamPropositionStudent
 
 #updateTeamPropositionLecturer
-
-#getMyStudents
 
 #setPropositionRestraint
 
