@@ -63,8 +63,7 @@ class ReviewForm(db.Model):
     ReviewName = db.Column(db.Text)
     Visibility = db.Column(db.Text)
     DateDue = db.Column(db.Text)
-    SumittedFormJSON = db.Column(db.JSON)
-    IsTeamAssignment = db.Column(db.Integer)
+    SubmittedFormJSON = db.Column(db.JSON)
     AssignedID = db.Column(db.Integer)
 
 class ReviewFormAssignedTeams(db.Model):
@@ -111,7 +110,6 @@ class Assessment(db.Model):
     __tablename__ = 'Assessment'
     AssessmentID = db.Column(db.Integer, primary_key=True)
     AssessmentName = db.Column(db.Text)
-    isTeamAssignment = db.Column(db.Integer)
     ModuleID = db.Column(db.Text)
     Email = db.Column(db.Text)
 
@@ -144,15 +142,14 @@ def modules_serializer(modules):
         'ModuleName' : modules.ModuleName
     }    
 
-
 def reviewForm_serializer(reviewForm):
     return {
         'ReviewID' : reviewForm.ReviewID,
         'ReviewName' : reviewForm.ReviewName,
         'Visibility' : reviewForm.Visibility,
-        'DateDue' : reviewForm.DataDue,
-        'StructureID' : reviewForm.StructureID,
-        'IsTeamAssignment' : reviewForm.IsTeamAssignment
+        'DateDue' : reviewForm.DateDue,
+        'SubmittedFormJSON' : reviewForm.SubmittedFormJSON,
+        'AssignedID' : reviewForm.AssignedID
         # SubmittedFormJSON
     }        
 
@@ -164,13 +161,6 @@ def reviewFormAssignedTeams_serializer(reviewFormAssignedteams):
         'NoOfStudentsCompleted' : reviewFormAssignedteams.NoOfStudentsCompleted,
         'NoOfStudentsAssigned': reviewFormAssignedteams.NoOfStudentsAssigned,
         'HasTeamCompleted' : reviewFormAssignedteams.HasTeamCompleted
-    }    
-
-def reviewFormStructure_serializer(reviewFormStructure):
-    return {
-        'StructureID' : reviewFormStructure.StructureID,
-        'StructureName' : reviewFormStructure.StructureName,
-        # FormStructureJSON
     }    
 
 def studentAssignedTeams_serializer(studentAssignedTeams):
@@ -188,7 +178,8 @@ def teams_serializer(teams):
         'TeamName' : teams.TeamName,
         'ModuleID' : teams.ModuleID,
         'GroupMark' : teams.GroupMark,
-        'GroupGrade' : teams.GroupGrade        
+        'GroupGrade' : teams.GroupGrade,
+        'AssessmentID': teams.AssessmentID    
     }  
 
 def user_serializer(user):
@@ -211,7 +202,6 @@ def assessment_serializer(assessment):
     return {
         'AssessmentID' : assessment.AssessmentID,
         'AssessmentName' : assessment.AssessmentName,
-        'isTeamAssignment' : assessment.isTeamAssignment,
         'ModuleID' : assessment.ModuleID,
         'Email' : assessment.Email
     }    
@@ -347,6 +337,41 @@ def uploadForm():
     else:
         return {'Message':'Expected post'} 
 
+#Upload JSON of form created by lecturer
+@app.route('/updateform', methods=['GET', 'POST'])
+def updateForm():
+    if request.method == 'POST':
+        try:
+            req_data=ast.literal_eval(request.data.decode('utf-8'))
+            content = req_data['Form']
+            form = json.loads(content)
+            email = form['email']
+            createdformname = form['name']
+            assessmentid = form['assessmentid']
+            formToUpdate = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssessmentID == assessmentid)
+            formToUpdate.CreatedFormJSON = content
+            db.session.commit()
+            # print(str(toupload.AssignedID))
+            return {'Message': 'Successfully updated'}
+        except:
+            raise Exception("Failed to upload")
+    else:
+        return {'Message':'Expected post'} 
+
+# load form created by lecturer
+@app.route('/loadunsubmittedform', methods=['GET', 'POST'])
+def loadUnsubmittedForm():
+    if request.method == 'POST':
+        try:
+            req_data=ast.literal_eval(request.data.decode('utf-8'))
+            assignedID = req_data['AssignedID']
+
+            return jsonify([*map(lecturerassignedforms_serializer, LecturerAssignedForm.query.filter(LecturerAssignedForm.AssignedID == assignedID))])
+        except:
+            raise Exception("Failed to upload")
+    else:
+        return {'Message':'Expected post'} 
+
 @app.route('/getlecturersformodule', methods=['GET', 'POST'])
 def getLecturersForModule():
     if request.method == 'POST':
@@ -380,19 +405,12 @@ def createAssignment():
             y = json.loads(content)
             email = y['creatoremail']
             assessmentname = y['assessmentname']
-            assignmenttype = y['assignmenttype']
-
-            isteamassignment = ''
-            if assignmenttype == 'team':
-                isteamassignment = 1
-            elif assignmenttype == 'solo':
-                isteamassignment = 0
 
             listofassignee = y['lecturersformodule']
             moduleid = y['moduleid']
             # print(listofassignee, file=sys.stderr)
             # print(createdformname, file=sys.stderr)
-            touploadassessment = Assessment(AssessmentName = assessmentname, isTeamAssignment = isteamassignment, ModuleID = moduleid, Email = email)      
+            touploadassessment = Assessment(AssessmentName = assessmentname, ModuleID = moduleid, Email = email)      
             db.session.add(touploadassessment)
             db.session.flush()
             id = touploadassessment.AssessmentID
@@ -408,6 +426,20 @@ def createAssignment():
     else:
         return {'Message':'Expected post'} 
 
+# load assessment created by lecturer
+@app.route('/loadunsubmittedassignment', methods=['GET', 'POST'])
+def loadUnsubmittedAssessment():
+    if request.method == 'POST':
+        try:
+            req_data=ast.literal_eval(request.data.decode('utf-8'))
+            assessmentid = req_data['AssessmentID']
+
+            return jsonify([*map(assessment_serializer, Assessment.query.filter(Assessment.AssessmentID == assessmentid))])
+        except:
+            raise Exception("Failed to upload")
+    else:
+        return {'Message':'Expected post'} 
+
 #Return list of assessments for given Module
 @app.route('/getteamassessmentsforlecturer', methods=['GET', 'POST'])
 def getMyTeamAssessments():
@@ -415,7 +447,7 @@ def getMyTeamAssessments():
         try: 
             req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data['Email']
-            return jsonify([*map(assessment_serializer, Assessment.query.filter(Assessment.Email == email).filter(Assessment.isTeamAssignment == 1))])
+            return jsonify([*map(assessment_serializer, Assessment.query.filter(Assessment.Email == email))])
         except: 
             raise Exception("Failed to retrieve Modules")
     else:
@@ -454,39 +486,11 @@ def getTeamsForAssessment():
             req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data['Email']
             listofAssessments =[]
-            return jsonify([*map(assessment_serializer, Assessment.query.filter(Assessment.Email == email).filter(Assessment.isTeamAssignment == 1))])
+            return jsonify([*map(assessment_serializer, Assessment.query.filter(Assessment.Email == email))])
         except: 
             raise Exception("Failed to retrieve Modules")
     else:
         return {'Message':'Expected POST'}   
-
-@app.route('/uploadformsolo', methods=['GET', 'POST'])
-def uploadFormSolo():
-    if request.method == 'POST':
-        try:
-            req_data = ast.literal_eval(request.data.decode('utf-8'))
-            assignedid = req_data['AssignedID']
-            assessmentid = req_data['AssessmentID']
-
-            moduleID = Assessment.query.with_entities(Assessment.ModuleID).filter(Assessment.AssessmentID == assessmentid)
-            print(moduleID, file=sys.stderr)
-            listOfStudents = []
-
-            for row in ModuleAssignedUsers.query.with_entities(ModuleAssignedUsers.Email).filter(ModuleAssignedUsers.ClassID == moduleID).all():
-                listOfStudents.append([row])
-
-            print(listOfStudents, file=sys.stderr)
-
-
-
-            return { 'Message': 'Testphase'}
-
-
-        except:
-            raise Exception("Failed to upload form")
-    else: 
-        return {'Message':'Expected POST'}
-
 
 
 @app.route('/uploadformteam', methods=['GET', 'POST'])
@@ -505,7 +509,6 @@ def uploadFormTeam():
             date_time_obj = datetime.datetime.strptime(date, '%d/%m/%Y %H:%M:%S')
             moduleID = Assessment.query.with_entities(Assessment.ModuleID).filter(Assessment.AssessmentID == assessmentid)
             assessmentName = Assessment.query.with_entities(Assessment.AssessmentName).filter(Assessment.AssessmentID == assessmentid)
-            assessment = LecturerAssignedForm.query.with_entities(LecturerAssignedForm.CreatedFormJSON).filter(LecturerAssignedForm.AssessmentID == assessmentid).first()
             uniqueTeamNames = []
             for x in teams:
                 uniqueTeamNames.append(x['teamname'])
@@ -515,14 +518,13 @@ def uploadFormTeam():
                 for x in uniqueTeamNames:
                     #create teams
                     team = Teams(TeamName = x, ModuleID = moduleID, AssessmentID = assessmentid)
-                    print(team, file=sys.stderr)
                     db.session.add(team)
                     db.session.flush()
                     teamid = team.TeamsID
                     db.session.commit()
 
                     #create review form for team
-                    reviewform = ReviewForm(ReviewName = assessmentName, Visibility = 1, DateDue = date_time_obj, IsTeamAssignment = 1, AssignedID = assignedid)
+                    reviewform = ReviewForm(ReviewName = assessmentName, Visibility = 1, DateDue = date_time_obj, AssignedID = assignedid)
                     db.session.add(reviewform)
                     db.session.flush()
                     reviewid = reviewform.ReviewID
@@ -543,6 +545,7 @@ def uploadFormTeam():
                             student = StudentAssignedTeams(TeamID = teamid, Email = z['email'])
                             db.session.add(student)
                             db.session.commit()
+                            
             except:
                 raise Exception("Failed to create")
 
@@ -552,34 +555,132 @@ def uploadFormTeam():
             raise Exception("Failed to upload form")
     else: 
         return {'Message':'Expected POST'}
-#get classes for module
-#pick teams for each class
-            # listofTest =[]
-            # for row in ModuleAssignedUsers.query.with_entities(ModuleAssignedUsers.ModuleID).filter(ModuleAssignedUsers.Email == email).all():
-            #     listofTest.append(row)
-
-            # listToPass = [i[0] for i in listofTest]
-
-            # listOfModules = Modules.query.filter(Modules.ModuleID.in_(listToPass)).all()
 
 
-# @app.route('/createteam', methods=['GET', 'POST'])
-# def createTeam():
-#     if request.method == 'POST':
-#         try:
+@app.route('/getmyassessmentsstudent', methods=['GET', 'POST'])
+def getStudentAssignments():
+    if request.method == 'POST':
+        try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            email = req_data['Email']
+
+            listOfTeamID = []
+            for row in StudentAssignedTeams.query.with_entities(StudentAssignedTeams.TeamID).filter(StudentAssignedTeams.Email == email).all():
+                listOfTeamID.append(row)
+            listOfTeamID = [i[0] for i in listOfTeamID]
+        
+            listOfReviewID = []
+            for row in ReviewFormAssignedTeams.query.with_entities(ReviewFormAssignedTeams.ReviewID).filter(ReviewFormAssignedTeams.TeamID.in_(listOfTeamID)).all():
+                listOfReviewID.append(row)
+            listOfReviewID = [i[0] for i in listOfReviewID]
+
+            # reviewForms = ReviewForm.query.filter(ReviewForm.ReviewID.in_(listOfReviewID)).all()
+            return jsonify([*map(reviewForm_serializer, ReviewForm.query.filter(ReviewForm.ReviewID.in_(listOfReviewID)).all())])
+
+        except:
+            raise Exception("Failed to get assessments")
+    else: 
+        return {'Message':'Expected POST'}
+
+@app.route('/loadform', methods=['GET', 'POST'])
+def getMyForm():
+    if request.method == 'POST':
+        try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            reviewid = req_data['ReviewID']
+
+            assignedid = ReviewForm.query.with_entities(ReviewForm.AssignedID).filter(ReviewForm.ReviewID == reviewid).first()
+            assessmentid = LecturerAssignedForm.query.with_entities(LecturerAssignedForm.AssessmentID).filter(LecturerAssignedForm.AssignedID == assignedid[0]).first()
+            teamid = Teams.query.with_entities(Teams.TeamsID).filter(Teams.AssessmentID == assessmentid[0]).first()
             
-#         except: 
-#             raise Exception("Failed to create teams")
-#     else:
-#         return {'Message':'Expected post'}
+            reviewform = ReviewForm.query.filter(ReviewForm.ReviewID == reviewid)
+            lecturerassignedform = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssignedID == assignedid[0])
 
-#getMyReviewFormListStudents
+            emails = []
+            for row in StudentAssignedTeams.query.with_entities(StudentAssignedTeams.Email).filter(StudentAssignedTeams.TeamID == teamid[0]).all():
+                emails.append(row)
+            emails = [i[0] for i in emails]
+
+            users = User.query.filter(User.Email.in_(emails))
+            
+
+            # reviewForms = ReviewForm.query.filter(ReviewForm.ReviewID.in_(listOfReviewID)).all()
+            return jsonify([*map(reviewForm_serializer, reviewform)], [*map(lecturerassignedforms_serializer, lecturerassignedform)], [*map(user_serializer, users)])
+
+        except:
+            raise Exception("Failed to get assessments")
+    else: 
+        return {'Message':'Expected POST'}
+
+@app.route('/updatereview', methods=['GET', 'POST'])
+def updateMyReview():
+    if request.method == 'POST':
+        try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            reviewid = req_data['ReviewID']
+
+            assignedid = ReviewForm.query.with_entities(ReviewForm.AssignedID).filter(ReviewForm.ReviewID == reviewid).first()
+            assessmentid = LecturerAssignedForm.query.with_entities(LecturerAssignedForm.AssessmentID).filter(LecturerAssignedForm.AssignedID == assignedid[0]).first()
+            teamid = Teams.query.with_entities(Teams.TeamsID).filter(Teams.AssessmentID == assessmentid[0]).first()
+            
+            reviewform = ReviewForm.query.filter(ReviewForm.ReviewID == reviewid)
+            lecturerassignedform = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssignedID == assignedid[0])
+
+            emails = []
+            for row in StudentAssignedTeams.query.with_entities(StudentAssignedTeams.Email).filter(StudentAssignedTeams.TeamID == teamid[0]).all():
+                emails.append(row)
+            emails = [i[0] for i in emails]
+
+            users = User.query.filter(User.Email.in_(emails))
+            
+
+            # reviewForms = ReviewForm.query.filter(ReviewForm.ReviewID.in_(listOfReviewID)).all()
+            # return jsonify([*map(reviewForm_serializer, reviewform)], [*map(lecturerassignedforms_serializer, lecturerassignedform)], [*map(user_serializer, users)])
+
+        except:
+            raise Exception("Failed to get assessments")
+    else: 
+        return {'Message':'Expected POST'}
+
+
+@app.route('/deleteunfinished', methods=['GET', 'POST'])
+def deleteUnfinished():
+    if request.method == 'POST':
+        try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            assessmentid = req_data['AssessmentID']
+
+
+            assessmentToDelete = Assessment.query.filter(Assessment.AssessmentID == assessmentid).first()
+            db.session.delete(assessmentToDelete)
+            db.session.commit()
+
+            existsAssignedForm = db.session.query(db.exists().where(AssessmentAssignedUsers.AssessmentID == assessmentid)).scalar()
+            if existsAssignedForm:
+                assessmentAssignedUsersToDelete = AssessmentAssignedUsers.query.filter(AssessmentAssignedUsers.AssessmentID == assessmentid).all()
+                for x in assessmentAssignedUsersToDelete:
+                    db.session.delete(x)
+                    db.session.commit()
+
+            existsAssignedForm = db.session.query(db.exists().where(LecturerAssignedForm.AssessmentID == assessmentid)).scalar()
+            if existsAssignedForm:
+                lecturerAssignedFormToDelete = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssessmentID == assessmentid).first()
+                db.session.delete(lecturerAssignedFormToDelete)
+                db.session.commit()
+
+
+
+            # reviewForms = ReviewForm.query.filter(ReviewForm.ReviewID.in_(listOfReviewID)).all()
+            return {'Message' : 'Unused content successfully deleted'}
+
+        except:
+            raise Exception("Failed to get assessments")
+    else: 
+        return {'Message':'Expected POST'}
 
 #loadReviewFormStudent
 
 #getMyTeamStudent
-
-#createTeamsLecturer
 
 #submitTeamPropositionStudent
 
