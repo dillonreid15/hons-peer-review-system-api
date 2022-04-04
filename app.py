@@ -505,10 +505,16 @@ def getMyForm():
         try:
             req_data = ast.literal_eval(request.data.decode('utf-8'))
             reviewid = req_data['ReviewID']
+            email = req_data['Email']
 
             assignedid = ReviewForm.query.with_entities(ReviewForm.AssignedID).filter(ReviewForm.ReviewID == reviewid).first()
             assessmentid = LecturerAssignedForm.query.with_entities(LecturerAssignedForm.AssessmentID).filter(LecturerAssignedForm.AssignedID == assignedid[0]).first()
-            teamid = Teams.query.with_entities(Teams.TeamsID).filter(Teams.AssessmentID == assessmentid[0]).first()
+            teamids = []
+            for row in Teams.query.with_entities(Teams.TeamsID).filter(Teams.AssessmentID == assessmentid[0]).all():
+                teamids.append(row)
+            teamids = [i[0] for i in teamids]
+
+            teamid = StudentAssignedTeams.query.with_entities(StudentAssignedTeams.TeamID).filter(StudentAssignedTeams.TeamID.in_(teamids)).filter(StudentAssignedTeams.Email == email).first()
             
             reviewform = ReviewForm.query.filter(ReviewForm.ReviewID == reviewid)
             lecturerassignedform = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssignedID == assignedid[0])
@@ -595,14 +601,63 @@ def deleteUnfinished():
     else: 
         return {'Message':'Expected POST'}
 
-#loadReviewFormStudent
+@app.route('/studentupdateform', methods=['GET', 'POST'])
+def updateMyReviewStudent():
+    if request.method == 'POST':
+        try:
+            req_data = ast.literal_eval(request.data.decode('utf-8'))
+            reviewid = req_data['ReviewID']
+            formJSON = req_data['FormCat']
 
-#getMyTeamStudent
+            email = formJSON[0]['Email']
 
-#submitTeamPropositionStudent
+            formToUpdate = ReviewForm.query.filter(ReviewForm.ReviewID == reviewid).first()
+            jsontoupdate = ReviewForm.query.with_entities(ReviewForm.SubmittedFormJSON).filter(ReviewForm.ReviewID == reviewid).first()
+            teamToUpdate = ReviewFormAssignedTeams.query.filter(ReviewFormAssignedTeams.ReviewID == reviewid).first()
+            noComp = teamToUpdate.NoOfStudentsCompleted
+            if jsontoupdate[0] == None:
+                formToUpdate.SubmittedFormJSON = formJSON
+                db.session.commit()
+                teamToUpdate.NoOfStudentsCompleted = 1
+                db.session.commit()
+            elif jsontoupdate[0] != None:
+                toUpdate = []
+                noCheck = 0
+                for x in jsontoupdate[0]:
+                    if x['Email'] == email:
+                        noCheck = 1
+                        toUpdate.extend(formJSON)
+                    elif x['Email'] != email:
+                        toUpdate.extend(x)
+                if noCheck == 1:
+                    toUpdate.extend(formJSON)
+                if noCheck == 0:
+                    teamToUpdate.NoOfStudentsCompleted = noComp + 1
+                    db.session.commit()
+                formToUpdate.SubmittedFormJSON = toUpdate
+                db.session.commit()
 
-#updateTeamPropositionLecturer
 
-#setPropositionRestraint
+            return {'Message':'Test'}
+        except:
+            raise Exception("Failed to get assessments")
+    else: 
+        return {'Message':'Expected POST'}
 
-#getStudentDetails
+
+@app.route('/updateform', methods=['GET', 'POST'])
+def updateForm():
+    if request.method == 'POST':
+            try:
+                req_data=ast.literal_eval(request.data.decode('utf-8')) 
+                content = req_data['Form']
+                form = json.loads(content)
+                assessmentid = form['assessmentid']
+                x = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssessmentID == assessmentid).first()
+                x.CreatedFormJSON = content
+                db.session.commit()
+                return {'Message': 'Successfully updated'}
+            except:
+                raise Exception("Failed to upload")
+    else:
+        return {'Message':'Expected post'} 
