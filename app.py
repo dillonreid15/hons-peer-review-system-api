@@ -339,22 +339,69 @@ def uploadForm():
         return {'Message':'Expected post'} 
 
 #Upload JSON of form created by lecturer
-@app.route('/updateform', methods=['GET', 'POST'])
-def updateForm():
+
+@app.route('/uploadformteam', methods=['GET', 'POST'])
+def uploadFormTeam():
     if request.method == 'POST':
         try:
             req_data=ast.literal_eval(request.data.decode('utf-8'))
             content = req_data['Form']
             form = json.loads(content)
-            assessmentid = form['assessmentid']
-            x = LecturerAssignedForm.query.filter(LecturerAssignedForm.AssessmentID == assessmentid).first()
-            x.CreatedFormJSON = content
-            db.session.commit()
-            return {'Message': 'Successfully updated'}
+            assessmentid = form['AssessmentID']
+            assignedid = form['AssignedID']
+            teams = form['Teams']
+            duedate = form['DueDate']
+            duetime = form['DueTime']
+            date = duedate + ' ' + duetime + ':00'
+            date_time_obj = datetime.datetime.strptime(date, '%d/%m/%Y %H:%M:%S')
+            moduleID = Assessment.query.with_entities(Assessment.ModuleID).filter(Assessment.AssessmentID == assessmentid)
+            assessmentName = Assessment.query.with_entities(Assessment.AssessmentName).filter(Assessment.AssessmentID == assessmentid)
+            uniqueTeamNames = []
+            for x in teams:
+                uniqueTeamNames.append(x['teamname'])
+            uniqueTeamNames = set(uniqueTeamNames)
+
+            try:
+                for x in uniqueTeamNames:
+                    #create teams
+                    team = Teams(TeamName = x, ModuleID = moduleID, AssessmentID = assessmentid)
+                    db.session.add(team)
+                    db.session.flush()
+                    teamid = team.TeamsID
+                    db.session.commit()
+
+                    #create review form for team
+                    reviewform = ReviewForm(ReviewName = assessmentName, Visibility = 1, DateDue = date_time_obj, AssignedID = assignedid)
+                    db.session.add(reviewform)
+                    db.session.flush()
+                    reviewid = reviewform.ReviewID
+                    db.session.commit()
+
+                    noOfStudensPerTeam = 0
+                    for y in teams:
+                        if y['teamname'] == x:
+                            noOfStudensPerTeam += 1
+
+                    reviewassignedteam = ReviewFormAssignedTeams(TeamID = teamid, ReviewID = reviewid, NoOfStudentsCompleted = 0, NoOfStudentsAssigned = noOfStudensPerTeam, HasTeamCompleted = 0)
+                    db.session.add(reviewassignedteam)
+                    db.session.commit()
+
+                    #assign students to teams
+                    for z in teams:
+                        if z['teamname'] == x:
+                            student = StudentAssignedTeams(TeamID = teamid, Email = z['email'])
+                            db.session.add(student)
+                            db.session.commit()
+
+            except:
+                raise Exception("Failed to create")
+
+            return { 'Message': 'Upload Successfuly'}
+
         except:
-            raise Exception("Failed to upload")
-    else:
-        return {'Message':'Expected post'} 
+            raise Exception("Failed to upload form")
+    else: 
+        return {'Message':'Expected POST'}
 
 # load form created by lecturer
 @app.route('/loadunsubmittedform', methods=['GET', 'POST'])
