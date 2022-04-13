@@ -13,7 +13,7 @@ from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 # from apiHandler import ApiHandler
 from flask_sqlalchemy import SQLAlchemy
-from flaskext.mail import Mail, Message
+from flask_mail import Mail, Message
 from sqlalchemy.sql import text, func, select
 import pymysql
 import pymysql.cursors
