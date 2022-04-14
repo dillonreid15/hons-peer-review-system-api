@@ -259,11 +259,14 @@ def checkStudentData():
         try:
             req_data = ast.literal_eval(request.data.decode('utf-8'))
             email = req_data["Email"]
-            modules = ModuleAssignedUsers.query.filter_by(Email=email).first()
-            teams = StudentAssignedTeams.query.filter_by(Email=email).first()
-            if modules or teams == None:
+            user_to_validate = ModuleAssignedUsers.query.filter(ModuleAssignedUsers.Email==email).first()
+
+            if user_to_validate == None:
                 #generate test data
-                listOfModuleIDs = Modules.query.with_entities(Modules.ModuleID)
+                listOfModuleIDs = []
+                for row in Modules.query.with_entities(Modules.ModuleID).all():
+                    listOfModuleIDs.append(row)
+                listOfModuleIDs = [i[0] for i in listOfModuleIDs]
 
                 for x in listOfModuleIDs:
                     userToInsert = ModuleAssignedUsers(ModuleID=x, Email=email)
