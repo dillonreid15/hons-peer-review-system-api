@@ -875,12 +875,19 @@ def updateGrades():
                         for x in listofFormsLec[0]['Form']:
                                 if 'Mark' in x:
                                     for student in emailWithGradeToMod:
-                                        student['GradeToMod'] =  student['GradeToMod'] - x['Weighting'] + x['Mark']
+                                        gradeToMod = student['GradeToMod']
+                                        weighting = x['Weighting']
+                                        mark = x['Mark']
+                                        student['GradeToMod'] =  int(gradeToMod) - int(weighting) + int(mark)
                                 elif  'Student' in x:
                                     for stuInLecSub in x['Student']:
                                         for student in emailWithGradeToMod:
                                             if stuInLecSub['Email'] == student['Email']:
-                                                student['GradeToMod'] =  student['GradeToMod'] - x['Weighting'] + stuInLecSub['Mark']
+                                                gradeToMod = student['GradeToMod']
+                                                weighting = x['Weighting']
+                                                stuInLecSubNum = stuInLecSub['Mark']
+                                                print(stuInLecSub, file=sys.stderr)
+                                                student['GradeToMod'] =  int(gradeToMod) - int(weighting) + int(stuInLecSubNum)
                     #print(emailWithGradeToMod, file=sys.stderr)
                     for x in emailWithGradeToMod:
                         multi = x['GradeToMod'] / 100
