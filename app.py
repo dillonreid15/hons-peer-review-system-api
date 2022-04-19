@@ -1078,7 +1078,7 @@ def emailStudentGrades():
                 reviewname = ReviewForm.query.with_entities(ReviewForm.ReviewName).filter(ReviewForm.AssignedID == assignedid).first()
                 for id in reviewids:
 
-                    teamid = ReviewFormAssignedTeams.query.with_entities(ReviewFormAssignedTeams.TeamID).filter(ReviewFormAssignedTeams.ReviewID == reviewid[0]).first()
+                    teamid = ReviewFormAssignedTeams.query.with_entities(ReviewFormAssignedTeams.TeamID).filter(ReviewFormAssignedTeams.ReviewID == id).first()
                     groupmark = Teams.query.with_entities(Teams.GroupMark).filter(Teams.TeamsID == teamid[0]).first()
                     groupgrade = Teams.query.with_entities(Teams.GroupGrade).filter(Teams.TeamsID == teamid[0]).first()
                     
