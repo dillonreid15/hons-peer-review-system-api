@@ -481,7 +481,11 @@ def getMyAssessment():
 
             listOfUsers = [i[0] for i in listOfUsers]
 
-            users = User.query.filter(User.Email.in_(listOfUsers), User.IsStudent == 1).all()
+            #uncomment line in production
+            #users = User.query.filter(User.Email.in_(listOfUsers), User.IsStudent == 1).all()
+
+            #in replace of above line, for lecturers to be able to test the system properly 
+            users = User.query.filter(User.Email.in_(listOfUsers)).all()
 
 
             return jsonify([*map(user_serializer, users)])
